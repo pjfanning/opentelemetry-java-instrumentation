@@ -26,10 +26,11 @@ import org.apache.pekko.http.scaladsl.model.ErrorInfo;
  * reach the user handler, and never become an {@code HttpRequest}, so the regular server
  * instrumentation does not see them.
  *
- * <p>The handler overload instrumented here exposes only a status and an {@code ErrorInfo}, so
- * these spans have partial HTTP attributes and describe only the response. <a
- * href="https://github.com/apache/pekko-http/issues/1245">apache/pekko-http#1245</a> added rejected
- * request context in Pekko HTTP 2.0 for richer version-specific instrumentation.
+ * <p>The handler overload that every Pekko HTTP version calls exposes only a status and an {@code
+ * ErrorInfo}, so on Pekko HTTP 1.x these spans have partial HTTP attributes and describe only the
+ * response. <a href="https://github.com/apache/pekko-http/issues/1245">apache/pekko-http#1245</a>
+ * added an overload in Pekko HTTP 2.0 that also carries what was read of the rejected request, and
+ * a span started from that one reports the method, target and protocol as well.
  */
 public class PekkoHttpParsingErrorSingletons {
 
@@ -41,7 +42,7 @@ public class PekkoHttpParsingErrorSingletons {
   private static final VirtualField<ErrorInfo, Boolean> PARSING_ERROR =
       VirtualField.find(ErrorInfo.class, Boolean.class);
 
-  private static final Instrumenter<ErrorInfo, HttpResponse> instrumenter =
+  private static final Instrumenter<PekkoHttpParsingErrorRequest, HttpResponse> instrumenter =
       JavaagentHttpServerInstrumenters.create(
           PekkoHttpUtil.instrumentationName(),
           new PekkoHttpParsingErrorAttributesGetter(),
@@ -60,20 +61,40 @@ public class PekkoHttpParsingErrorSingletons {
    * <p>An {@code ErrorInfo} that was not marked is not a rejected request. The same handler answers
    * a request entity stream that failed and a response stream that failed, and both of those happen
    * after the request was delivered and already has a span of its own.
+   *
+   * <p>The mark is consumed, so a rejection gets at most one span. In Pekko HTTP 2.0 the handler
+   * overload that carries the rejected request delegates to the one that does not by default, and
+   * both are instrumented.
    */
   @Nullable
   public static Object[] startSpan(ErrorInfo info) {
+    return startSpan(info, null, null, null);
+  }
+
+  /**
+   * Starts the span for a rejected request of which the method, request-target and protocol may be
+   * known, see {@link #startSpan(ErrorInfo)}.
+   */
+  @Nullable
+  public static Object[] startSpan(
+      ErrorInfo info,
+      @Nullable String method,
+      @Nullable String rawRequestTarget,
+      @Nullable String protocol) {
     if (PARSING_ERROR.get(info) == null) {
       return null;
     }
+    PARSING_ERROR.set(info, null);
 
+    PekkoHttpParsingErrorRequest request =
+        new PekkoHttpParsingErrorRequest(info, method, rawRequestTarget, protocol);
     Context parentContext = Context.current();
-    if (!instrumenter.shouldStart(parentContext, info)) {
+    if (!instrumenter.shouldStart(parentContext, request)) {
       return null;
     }
-    Context context = instrumenter.start(parentContext, info);
+    Context context = instrumenter.start(parentContext, request);
     // the array carries the state from the enter advice to the exit advice
-    return new Object[] {context, context.makeCurrent(), info};
+    return new Object[] {context, context.makeCurrent(), request};
   }
 
   /**
@@ -86,7 +107,7 @@ public class PekkoHttpParsingErrorSingletons {
       Object[] enter, @Nullable HttpResponse response, @Nullable Throwable error) {
     ((Scope) enter[1]).close();
     Context context = (Context) enter[0];
-    ErrorInfo info = (ErrorInfo) enter[2];
+    PekkoHttpParsingErrorRequest request = (PekkoHttpParsingErrorRequest) enter[2];
 
     if (response != null) {
       // pekko response is immutable so the customizer just captures the added headers
@@ -100,21 +121,21 @@ public class PekkoHttpParsingErrorSingletons {
       }
     }
 
-    instrumenter.end(context, info, response, error);
+    instrumenter.end(context, request, response, error);
 
     return response;
   }
 
-  private static class NoopTextMapGetter implements TextMapGetter<ErrorInfo> {
+  private static class NoopTextMapGetter implements TextMapGetter<PekkoHttpParsingErrorRequest> {
 
     @Override
-    public Iterable<String> keys(ErrorInfo carrier) {
+    public Iterable<String> keys(PekkoHttpParsingErrorRequest carrier) {
       return emptyList();
     }
 
     @Nullable
     @Override
-    public String get(@Nullable ErrorInfo carrier, String key) {
+    public String get(@Nullable PekkoHttpParsingErrorRequest carrier, String key) {
       return null;
     }
   }

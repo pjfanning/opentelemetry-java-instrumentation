@@ -3,6 +3,8 @@ plugins {
   id("otel.scala-conventions")
 }
 
+// PekkoHttp2ParsingErrorInstrumentationModule applies only to pekko-http 2.x, which so far has only
+// milestone releases that muzzle skips, it gets its own passes once 2.0.0 is released
 muzzle {
   pass {
     group.set("org.apache.pekko")
@@ -11,6 +13,7 @@ muzzle {
     assertInverse.set(true)
     extraDependency("org.apache.pekko:pekko-stream_2.12:1.0.1")
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.tapir.TapirPekkoHttpServerRouteInstrumentationModule")
+    excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.PekkoHttp2ParsingErrorInstrumentationModule")
   }
   pass {
     group.set("org.apache.pekko")
@@ -19,6 +22,7 @@ muzzle {
     assertInverse.set(true)
     extraDependency("org.apache.pekko:pekko-stream_2.13:1.0.1")
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.tapir.TapirPekkoHttpServerRouteInstrumentationModule")
+    excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.PekkoHttp2ParsingErrorInstrumentationModule")
   }
   pass {
     group.set("org.apache.pekko")
@@ -27,6 +31,7 @@ muzzle {
     assertInverse.set(true)
     extraDependency("org.apache.pekko:pekko-stream_3:1.0.1")
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.tapir.TapirPekkoHttpServerRouteInstrumentationModule")
+    excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.PekkoHttp2ParsingErrorInstrumentationModule")
   }
   pass {
     group.set("com.softwaremill.sttp.tapir")
@@ -36,6 +41,7 @@ muzzle {
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.client.PekkoHttpClientInstrumentationModule")
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.PekkoHttpServerInstrumentationModule")
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.route.PekkoHttpServerRouteInstrumentationModule")
+    excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.PekkoHttp2ParsingErrorInstrumentationModule")
   }
   pass {
     group.set("com.softwaremill.sttp.tapir")
@@ -45,6 +51,7 @@ muzzle {
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.client.PekkoHttpClientInstrumentationModule")
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.PekkoHttpServerInstrumentationModule")
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.route.PekkoHttpServerRouteInstrumentationModule")
+    excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.PekkoHttp2ParsingErrorInstrumentationModule")
   }
   pass {
     group.set("com.softwaremill.sttp.tapir")
@@ -54,6 +61,7 @@ muzzle {
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.client.PekkoHttpClientInstrumentationModule")
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.PekkoHttpServerInstrumentationModule")
     excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.route.PekkoHttpServerRouteInstrumentationModule")
+    excludeInstrumentationModule("io.opentelemetry.javaagent.instrumentation.pekkohttp.v1_0.server.PekkoHttp2ParsingErrorInstrumentationModule")
   }
 }
 
@@ -61,6 +69,7 @@ dependencies {
   library("org.apache.pekko:pekko-http_2.12:1.0.0")
   library("org.apache.pekko:pekko-stream_2.12:1.0.1")
   compileOnly("com.softwaremill.sttp.tapir:tapir-pekko-http-server_2.12:1.7.0")
+  compileOnly(project(":instrumentation:pekko:pekko-http-1.0:compile-stub"))
 
   testInstrumentation(project(":instrumentation:pekko:pekko-actor-1.0:javaagent"))
   testInstrumentation(project(":instrumentation:executors:javaagent"))
@@ -130,9 +139,11 @@ listOf("test", "scala3Test").forEach {
     extensions.getByType(org.gradle.api.tasks.ScalaSourceDirectorySet::class.java).srcDir("src/pekko1TestShim/scala")
   }
 }
+// the pekko 2 suites also run the tests of what only pekko-http 2.x has
 listOf("pekko2Test", "pekko2Scala3Test").forEach {
   sourceSets.named(it) {
     extensions.getByType(org.gradle.api.tasks.ScalaSourceDirectorySet::class.java).srcDir("src/pekko2TestShim/scala")
+    extensions.getByType(org.gradle.api.tasks.ScalaSourceDirectorySet::class.java).srcDir("src/pekko2OnlyTest/scala")
   }
 }
 
